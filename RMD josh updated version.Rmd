@@ -1,0 +1,147 @@
+---
+title: "Passing EPA in Outdoor NFL Games"
+author: "Max S and Josh"
+date: "2023-10-19"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+# knit options
+knitr::opts_chunk$set(echo = F,
+                      results = 'markup',
+                      fig.width = 4,
+                      fig.height = 3,
+                      fig.align = 'center',
+                      message = F,
+                      warning = F)
+
+# packages
+library(tidyverse)
+library(faraway)
+library(skimr)
+```
+
+## Passing EPA (Expected Points Added) in Outdoor NFL Games in the 2021 and 2022 seasons
+
+The data was compiled using NFL play-by-play and game level data from NFLFastR (<https://github.com/nflverse/nflfastR>), cleaned and engineered using Python. The goal of this project is to predict passing EPA or passing play rate (We'll explain EPA further below) using pre game factors. The application of this model could be useful for NFL teams for game-planning. It could also have uses in sports betting and fantasy sports.
+
+Column names and sample data below:
+
+```{r, echo=F}
+data <- read.csv('/Users/joshc/Downloads/nflgameproject.csv') #set this to the proper location
+
+head(data)
+colnames(data)
+```
+
+### Column Descriptions
+
+Each row represents an individual offensive team in and individual game from the 2021 and 2022 seasons.
+
+game_id - The identifier for a game.
+
+posteam - Team on offense. precipitation - Categorical variable. Either no rain or snow "noprecip", light rain or snow "lightrainsnow", or moderate to heavy rain or snow "rainsnow".
+
+#### Game variables (possible Y values)
+
+rush_rate - Rate of rushing plays per offensive play for the game.
+
+pass_rate - Rate of passing plays per offensive play for the game.
+
+pass_epa_game - Average expected points added per pass play for the posteam over the full game. From NFLFastR "Expected Points (EP): using scoring event probabilities, the estimated expected points with respect to the possessing team before the play; simply put, the value of a particular situation to the offensive team, measured by points. Expected Points Added (EPA): expected points after the play minus expected points before." This statistic is the best way to measure success for an NFL offense.
+
+#### Pre-game variables (possible X values)
+
+weekday - Day of the week.
+
+surface - NFL Stadiums have either natural grass or turf.
+
+div_game - Categorical variable 1 or 0. 1 represents a game played by two teams in the same division. Division games usually have bigger playoff implications and longer standing rivalries.
+
+spread_line - The consensus sports book "spread." A negative spread means the team is favored, a positive spread represents an underdog.
+
+total_line - The consensus sports book "total." The total represents the over under for the total points predicted to be scored by sports bettors in an NFL game.
+
+wind - wind speed in miles per hour at the start of the game.
+
+temp - temperature (Fahrenheit) at the start of the game.
+
+epa_rush_last3 - average EPA on rushing plays for the team in their last 3 games.
+
+epa_pass_last3 - average EPA on passing plays for the team in their last 3 games.
+
+pass_rate_last3 - passing play rate for the team in their last 3 games.
+
+## Summary of the data:
+
+```{r}
+skim(data)
+```
+
+
+
+
+### Wind seems to have a relationship with passing rate but a less strong relationship with passing EPA.
+
+```{r, echo=FALSE}
+library(ggplot2)
+
+ggplot(data, aes(x=wind, y=pass_rate)) + geom_point() + labs(x = 'Wind Speed (MPH)', y = 'Passing Play Percentage')
+
+```
+
+```{r, echo=FALSE}
+library(ggplot2)
+
+ggplot(data, aes(x=wind, y=pass_epa_game)) + geom_point() + labs(x = 'Wind Speed (MPH)', y = 'Passing EPA')
+
+```
+
+### This is the section I was talking ab in my text
+```{r}
+ggplot(data, aes(x= div_game, y=pass_rate)) + geom_point()
+
+ggplot(data, aes(x = div_game, y = pass_epa_game)) + geom_point()
+```
+
+### Temperature also seems to have a relationship with passing rate but not as much with passing EPA.
+
+```{r, echo=FALSE}
+
+ggplot(data, aes(x=temp, y=pass_rate)) + geom_point() + labs(x = 'Temperature in Fahrenheit', y = 'Passing Play Percentage')
+
+```
+
+```{r, echo=FALSE}
+
+ggplot(data, aes(x=temp, y=pass_epa_game)) + geom_point() +labs(x = 'Temperature in Fahrenheit', y = 'Passing EPA')
+
+```
+
+### Spread line does not seem to have a relationship with passing rate but total line seems to have a strong positive relationship
+```{r, echo=FALSE}
+
+ggplot(data, aes(x=spread_line, y=pass_rate)) + geom_point() + labs(x = 'Spread Line', y= 'Passing Play Percentage')
+
+```
+
+```{r, echo=FALSE}
+
+ggplot(data, aes(x=total_line, y=pass_rate)) + geom_point() + labs(x='Total Predicted Points', y = 'Passing Play Percentage' )
+
+```
+This could lead us to the interesting conclusion that while passing the football may lead to scoring more points, it does not necessarily correlate to winning more games. The typical rationale would be that scoring more points leads to winning more games, but that is perhaps not the case.
+
+### A teams passing rate in their last 3 games seems to have a strong relationship with their passing rate in the following game, but passing success (EPA) in their last 3 games does not.
+```{r, echo=FALSE}
+
+ggplot(data, aes(x=pass_rate_last3, y=pass_rate)) + geom_point() + labs(x = 'Passing Play Percentage (Previous 3 Games)', y = 'Passing Play Percentage')
+
+```
+
+```{r, echo=FALSE}
+
+ggplot(data, aes(x=epa_pass_last3, y=pass_rate)) + geom_point() + labs(x = 'Passing EPA (Previous 3 Games)', y = 'Passing Play Percentage')
+
+```
+Conclusions could be more about team psychology here, regardless of passing performance over the last 3 games they will continue to pass. Perhaps could be applicable to defensive strategy, defenses don't need to worry about productivity, only patterns of actions.
