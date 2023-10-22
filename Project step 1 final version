@@ -2,7 +2,9 @@
 title: "Passing EPA in Outdoor NFL Games"
 author: "Max S and Josh"
 date: "2023-10-19"
-output: html_document
+output:
+  html_document: default
+  pdf_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -28,7 +30,7 @@ The data was compiled using NFL play-by-play and game level data from NFLFastR (
 Column names and sample data below:
 
 ```{r, echo=F}
-data <- read.csv('/Users/joshc/Downloads/nflgameproject.csv') #set this to the proper location
+data <- read.csv("/Users/joshc/Downloads/nflgameproject.csv") #set this to the proper location
 
 head(data)
 colnames(data)
@@ -79,30 +81,16 @@ skim(data)
 ```
 
 
+### Teams seem to pass less in division games and also have less success passing.
 
-
-### Wind seems to have a relationship with passing rate but a less strong relationship with passing EPA.
-
-```{r, echo=FALSE}
-library(ggplot2)
-
-ggplot(data, aes(x=wind, y=pass_rate)) + geom_point() + labs(x = 'Wind Speed (MPH)', y = 'Passing Play Percentage')
-
-```
-
-```{r, echo=FALSE}
-library(ggplot2)
-
-ggplot(data, aes(x=wind, y=pass_epa_game)) + geom_point() + labs(x = 'Wind Speed (MPH)', y = 'Passing EPA')
-
-```
-
-### This is the section I was talking ab in my text
 ```{r}
-ggplot(data, aes(x= div_game, y=pass_rate)) + geom_point()
+ggplot(data, aes(x= factor(div_game), y=pass_rate)) + geom_boxplot(fill = "lightblue", color = "darkblue", alpha = 0.7) + labs(title = "Pass Rate Division vs Other", x = "Division Game", y = 'Passing Play Percentage')
 
-ggplot(data, aes(x = div_game, y = pass_epa_game)) + geom_point()
+ggplot(data, aes(x= factor(div_game), y=pass_epa_game)) + geom_boxplot(fill = "lightblue", color = "darkblue", alpha = 0.7) + labs(title = "Pass EPA Division vs Other", x = "Division Game", y = "Passing EPA")
+
 ```
+
+Teams seem to be more conservative in divisional games.
 
 ### Temperature also seems to have a relationship with passing rate but not as much with passing EPA.
 
@@ -118,7 +106,10 @@ ggplot(data, aes(x=temp, y=pass_epa_game)) + geom_point() +labs(x = 'Temperature
 
 ```
 
+Like wind, conventional wisdom is that teams pass less and with less success in colder temps, but the data seems to have a lot of variance. Might make sense to change into a categorical variable.
+
 ### Spread line does not seem to have a relationship with passing rate but total line seems to have a strong positive relationship
+
 ```{r, echo=FALSE}
 
 ggplot(data, aes(x=spread_line, y=pass_rate)) + geom_point() + labs(x = 'Spread Line', y= 'Passing Play Percentage')
@@ -130,9 +121,11 @@ ggplot(data, aes(x=spread_line, y=pass_rate)) + geom_point() + labs(x = 'Spread 
 ggplot(data, aes(x=total_line, y=pass_rate)) + geom_point() + labs(x='Total Predicted Points', y = 'Passing Play Percentage' )
 
 ```
+
 This could lead us to the interesting conclusion that while passing the football may lead to scoring more points, it does not necessarily correlate to winning more games. The typical rationale would be that scoring more points leads to winning more games, but that is perhaps not the case.
 
 ### A teams passing rate in their last 3 games seems to have a strong relationship with their passing rate in the following game, but passing success (EPA) in their last 3 games does not.
+
 ```{r, echo=FALSE}
 
 ggplot(data, aes(x=pass_rate_last3, y=pass_rate)) + geom_point() + labs(x = 'Passing Play Percentage (Previous 3 Games)', y = 'Passing Play Percentage')
@@ -144,4 +137,5 @@ ggplot(data, aes(x=pass_rate_last3, y=pass_rate)) + geom_point() + labs(x = 'Pas
 ggplot(data, aes(x=epa_pass_last3, y=pass_rate)) + geom_point() + labs(x = 'Passing EPA (Previous 3 Games)', y = 'Passing Play Percentage')
 
 ```
+
 Conclusions could be more about team psychology here, regardless of passing performance over the last 3 games they will continue to pass. Perhaps could be applicable to defensive strategy, defenses don't need to worry about productivity, only patterns of actions.
