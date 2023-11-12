@@ -1,0 +1,125 @@
+---
+title: "Project Part 2"
+author: "Max S and Josh"
+date: "2023-11-07"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+# knit options
+knitr::opts_chunk$set(echo = F,
+                      results = 'markup',
+                      fig.width = 4,
+                      fig.height = 3,
+                      fig.align = 'center',
+                      message = F,
+                      warning = F)
+
+# packages
+library(faraway)
+library(tidyverse)
+library(tidymodels)
+library(modelr)
+library(ggplot2)
+```
+For Josh: things I have done vs haven't done:
+
+Intro X
+Hypothesis X
+Check Assumptions X
+Compute CI for Beta1 X
+Assess fit of your model X
+
+For you to do:
+
+"Plot variables, calculate confidence interval for mean and response at some interesting value of the explanatory variable. Interpret"
+
+Make sure everything is annotated properly and caption the plots.
+
+"Conclusion" I think the most interesting part of this is the R-squared is really low but the p-value is low enough that it's significant FWIW.
+
+
+
+## Simple Linear Regression with NFL Data
+
+### Introduction
+
+In the National Football League (NFL), success in the passing game is a large contributor to which team wins. Our project attempts to predict passing game success using pregame data. Our data comes from NFLFastR https://www.nflfastr.com/, a source for comprehensive play-by-play data. We are looking at outdoor NFL games from the 2021 and 2022 seasons.
+
+```{r, echo=F}
+passes <- read.csv('/Users/joshc/Downloads/nflgameproject.csv') #set this to the proper location
+```
+
+### Passing EPA and Wind, Are They Linearly Related?
+
+It is common wisdom among Football minds and the sports betting community that weather, particularly wind, has a significant effect on passing. But is this really true? And how big is the effect? Expected Points Added (EPA) is a stat that measures success in the passing game, so we will be using EPA per play (var pass_epa_game) as our response variable. Note this is a post-game stat, meaning it's calculated from game results. Most of our other variables are pre-game stats, meaning it's knowledge prior to the beginning of the game. The Wind variable, the pregame forecast for wind speed, will be our $X_1$. Our hypothesis is below:
+
+$\hat{\beta_1} = 0$,     $\hat{\beta_1} \neq 0$
+
+```{r, echo=T}
+set.seed(25)
+lmod <- lm(pass_epa_game ~ wind, data = passes)
+summary(lmod)
+x_bar <- passes %>% select(-pass_epa_game) %>% summarize(across(everything(), mean))
+x_game_complete <- sample_n(passes, 1)
+x_game <- x_game_complete %>% select(-pass_epa_game)
+
+```
+
+
+
+
+```{r}
+#residual plots
+augment(lmod, passes) %>%
+  pivot_longer(cols = wind) %>%
+  ggplot(aes(y = .resid, x = value)) +
+  facet_wrap(~ name, scales = 'free_x') +
+  geom_point() +
+  geom_hline(aes(yintercept = 0)) + 
+  labs(x = 'MPH', y = 'Residual')
+```
+
+### Assumptions
+
+Note that the data is atypical as it seems as though the wind variable is rounded, but it does look linear save for one giant outlier. Transforming the data did not create a better model.
+
+
+### Test for $\hat{\beta_1}$
+
+```{r, echo=T}
+pvalue <- coefficients(summary(lmod))[2,4]/2
+
+rsquared <- summary(lmod)$r.squared
+
+confint(lmod, level = .95)
+
+predict(lmod, newdata = x_bar, interval = 'confidence', level = 0.95)
+predict(lmod, newdata = x_game, interval = 'prediction', level = 0.95)
+```
+
+### Confidence Interval
+Above is out 95% confidence interval for wind. In plain language, this means that with 95% confidence a 1 mile per hour increase in the pregame forecast for windspeed is associated with a -0.0123 to -.0018 decrease in passing epa per play.
+
+Note that our confidence interval does not contain 0, and our p-value is well under .05, `r toString(pvalue)`, so we reject the null hypothesis. But our R-squared is very small `r toString(rsquared)`. Essentially, wind does have predictive power for passing game success, but that effect has a high variation.
+
+
+Also provided is a confidence interval for average conditions. With 95% confidence, the mean Passing EPA for an offense when the pregame conditions are equal to the average in the data is estimated to be between -.0206 and .0382 per play.
+
+Lastly is a prediction interval about the performance during a particular game. With 95% confidence, during their selected game, our selected offense's Passing EPA is estimated to be between -.579 and .669 per play. For our selected game, the wind speed was 4 mph, indicating why there is a non tangible effect on EPA, it has not been skewed toward worse performance by the wind.
+
+```{r}
+temp_var <- predict(lmod, interval = 'prediction')
+newdf <- cbind(passes, temp_var)
+ggplot(newdf, aes(x = wind, y = pass_epa_game))+
+  geom_point() + 
+  geom_smooth(method = lm, se = TRUE) + 
+  labs(x = "Wind (MPH)", y = "Passing EPA")+
+  geom_line(aes(y = lwr), color = 'red', linetype = 'dashed') +
+  geom_line(aes(y=upr), color = 'red', linetype = 'dashed')
+```
+
+Finally, we have the plot of Wind vs Passing EPA showing both 95% confidence bands, and a 95% prediction band. The width of the confidence interval (shaded grey area) increases with wind speed, and the overall Passing EPA is trending downward. This highlights the previously shown conclusion that wind speed does in fact have a highly varying, but negative impact on passing EPA. While these margins may seem inconsequential looking at the graph, we have to remember that this EPA is on a per play basis. A small lowering of EPA per play, because of the wind, will result in a profound decrease in overall point total for the whole game.
+
+
+
