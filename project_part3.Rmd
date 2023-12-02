@@ -1,0 +1,113 @@
+---
+title: "project_part3"
+author: "Max S and Josh"
+date: "2023-11-20"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+# knit options
+knitr::opts_chunk$set(echo = F,
+                      results = 'markup',
+                      fig.width = 4,
+                      fig.height = 3,
+                      fig.align = 'center',
+                      message = F,
+                      warning = F)
+
+# packages
+library(faraway)
+library(tidyverse)
+library(tidymodels)
+library(modelr)
+library(ggplot2)
+library(dplyr)
+```
+
+## Linear Modeling with NFL Data
+
+### Introduction
+
+In the NFL, success in the passing game is a key part of winning a football game. Is it possible we can predict passing game success based on pregame factors? We seek to create a model using play-by-play and game level data from NFLFastR ((<https://github.com/nflverse/nflfastR>)). Our response variable will be Expected Points Added (EPA) Passing per play, the most comprehensive and unbiased statistic for passing game success. Our data is a collection of outdoor football games from the 2021 and 2022 seasons.
+
+```{r, echo=F}
+data <- read.csv('/Users/maxsteinberg/Desktop/dfs_scripts/nflgameproject.csv') #set this to the proper location
+
+```
+
+Things to do (Josh):
+I have completed everything on the project step 3 instructions up until these below. You can look at the project step 3 after "After choosing a single model."
+
+Interpret $\beta$ coefficients
+Report adjusted R-squared on test data
+Analyze residuals and influential points
+Give CIs
+
+
+Once you're done, I can write the conclusion and give an interpretation of the model that makes sense.
+
+
+### Feature Engineering
+
+Before training our model, we need to take a few steps to ensure we have the proper features to create the best model. We want to change some of our weather terms into categorical variables so we can explore whether it helps improve their values in our model. We will create new categorical variables for wind and temperature. We will also combine lightrainsnow and rainsnow as there are few instances of lightrainsnow. We are also changing the variable 'a_turf' in surface to 'fieldturf' as both are turf surfaces and there and very few instances of a_turf.
+
+```{r fig.cap = "Passing vs wind in different temperatures"}
+data$cold <- ifelse(data$temp < 40, "under_40", "over_40")
+data$high_wind <- ifelse(data$wind > 15, "high_wind", "low_wind")
+data$precipitation<- trimws(data$precipitation)
+data$precipitation <- sub('lightrainsnow', 'rainsnow', data$precipitation)
+
+data$surface <- trimws(data$surface)
+data$surface <- sub('a_turf', 'fieldturf', data$surface)
+
+data %>% ggplot(aes(x = wind, y = pass_epa_game)) + facet_wrap(~ factor(cold)) + geom_point()
+data %>% ggplot(aes(x = wind, y = pass_rate)) + facet_wrap(~ factor(cold)) + geom_point()
+```
+Looking at the data, it seems like wind may have a stronger effect when it's cold or when there's rain/snow, so we will try those together as an interaction term. Interestingly enough, the relationship between pass rate and wind in cold temperatures looks very strong, suggesting teams do not believe they will have success passing the ball on cold days with high wind.
+
+
+```{r}
+set.seed(999)
+proportion <- 0.8
+train_indices <- sample(seq_len(nrow(data)), size = round(proportion * nrow(data)))
+train_set <- data[train_indices, ]
+test_set <- data[-train_indices, ]
+
+```
+
+
+## Creating the models
+
+We will be creating two models. A "Vegas" model, meaning a model including sportsbook factors like spread and total, and a "Betting" model, one without those sportsbook factors that could be used for betting purposes. We'll start with the Betting model.
+
+```{r}
+betting_model <- lm(pass_epa_game ~ wind + wind:cold + temp + precipitation + epa_rush_last3
+           + epa_pass_last3 + pass_rate_last3 + surface, data = train_set)
+summary(betting_model)
+```
+
+Let's train the Vegas model.
+
+```{r}
+vegas_model <- lm(pass_epa_game ~ spread_line + total_line + wind + wind:cold + temp + precipitation + epa_rush_last3
+           + epa_pass_last3 + pass_rate_last3 + surface, data = train_set)
+summary(vegas_model)
+```
+
+Not surpisingly, the Vegas Model outperforms the Betting model in terms for R-squared. Sportsbooks are very efficient markets, so the betting lines for these games will be a great predictor of how much success these teams will have in the passing game. Comparing the models using an F-test also shows that the Vegas Model is not the same as the betting model.
+
+```{r}
+anova(vegas_model, betting_model)
+```
+
+To improve our Vegas Model, we use stepwise backward selection. The final model is below.
+```{r}
+step_result <- stats::step(vegas_model, direction="backward", test="F")
+
+final_vegas_model <- lm(pass_epa_game ~ wind + temp + precipitation
+                        + spread_line + total_line, data = train_set)
+
+summary(final_vegas_model)
+```
+
+
