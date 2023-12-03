@@ -1,6 +1,6 @@
 ---
 title: "project_part3"
-author: "Max S and Josh"
+author: "Max S and Josh C"
 date: "2023-11-20"
 output: html_document
 ---
@@ -28,7 +28,7 @@ library(dplyr)
 
 ### Introduction
 
-In the NFL, success in the passing game is a key part of winning a football game. Is it possible we can predict passing game success based on pregame factors? We seek to create a model using play-by-play and game level data from NFLFastR ((<https://github.com/nflverse/nflfastR>)). Our response variable will be Expected Points Added (EPA) Passing per play, the most comprehensive and unbiased statistic for passing game success. Our data is a collection of outdoor football games from the 2021 and 2022 seasons.
+In the NFL, success in the passing game is a key part of winning a football game. In this project, we seek to create a model to predict passing game success (quantified as Expected Points Added (EPA) Passing per play) using play-by-play and game level data from NFLFastR ((<https://github.com/nflverse/nflfastR>)). All of our input variables will be pre-game factors. Our data is a collection of outdoor football games from the 2021 and 2022 seasons.
 
 ```{r, echo=F}
 data <- read.csv('/Users/maxsteinberg/Desktop/dfs_scripts/nflgameproject.csv') #set this to the proper location
@@ -39,9 +39,9 @@ Things to do (Josh):
 I have completed everything on the project step 3 instructions up until these below. You can look at the project step 3 after "After choosing a single model."
 
 Interpret $\beta$ coefficients
-Report adjusted R-squared on test data
 Analyze residuals and influential points
 Give CIs
+Do anything that you feel I missed
 
 
 Once you're done, I can write the conclusion and give an interpretation of the model that makes sense.
@@ -49,7 +49,9 @@ Once you're done, I can write the conclusion and give an interpretation of the m
 
 ### Feature Engineering
 
-Before training our model, we need to take a few steps to ensure we have the proper features to create the best model. We want to change some of our weather terms into categorical variables so we can explore whether it helps improve their values in our model. We will create new categorical variables for wind and temperature. We will also combine lightrainsnow and rainsnow as there are few instances of lightrainsnow. We are also changing the variable 'a_turf' in surface to 'fieldturf' as both are turf surfaces and there and very few instances of a_turf.
+We need to take a few steps to ensure we have the proper features to create the best model. We want to change some of our weather terms into categorical variables so we can explore whether it helps improve their values in our model. We will create new categorical variables for wind and temperature. We will also combine lightrainsnow and rainsnow as there are few instances of lightrainsnow. We are also changing the variable 'a_turf' in surface to 'fieldturf' as both are turf surfaces and there and very few instances of a_turf.
+
+Before training the model, we want to higlight some analysis of a possible interaction variable. In part 2 of our project, we showed that wind was a small but relevant factor in predicting passing success. We wanted to see if colder weather may make wind a stronger effect. Plots comparing wind on EPA passing are below, split out by data wear the temperature was over 40 degrees Fahrenheit and under 40 degrees.
 
 ```{r fig.cap = "Passing vs wind in different temperatures"}
 data$cold <- ifelse(data$temp < 40, "under_40", "over_40")
@@ -63,7 +65,7 @@ data$surface <- sub('a_turf', 'fieldturf', data$surface)
 data %>% ggplot(aes(x = wind, y = pass_epa_game)) + facet_wrap(~ factor(cold)) + geom_point()
 data %>% ggplot(aes(x = wind, y = pass_rate)) + facet_wrap(~ factor(cold)) + geom_point()
 ```
-Looking at the data, it seems like wind may have a stronger effect when it's cold or when there's rain/snow, so we will try those together as an interaction term. Interestingly enough, the relationship between pass rate and wind in cold temperatures looks very strong, suggesting teams do not believe they will have success passing the ball on cold days with high wind.
+Interestingly enough, the relationship that stands out is actually between in game pass rate (pass_rate) and wind in cold temperatures. This suggests teams may not believe they will have success passing the ball on cold days with high wind.
 
 
 ```{r}
@@ -78,7 +80,7 @@ test_set <- data[-train_indices, ]
 
 ## Creating the models
 
-We will be creating two models. A "Vegas" model, meaning a model including sportsbook factors like spread and total, and a "Betting" model, one without those sportsbook factors that could be used for betting purposes. We'll start with the Betting model.
+We will be creating two models. A "Vegas" model, meaning a model including sportsbook factors like spread and total, and a "Betting" model, one without those sportsbook factors that could be used for betting or fantasy sports purposes. We'll start with the Betting model.
 
 ```{r}
 betting_model <- lm(pass_epa_game ~ wind + wind:cold + temp + precipitation + epa_rush_last3
@@ -94,20 +96,45 @@ vegas_model <- lm(pass_epa_game ~ spread_line + total_line + wind + wind:cold + 
 summary(vegas_model)
 ```
 
-Not surpisingly, the Vegas Model outperforms the Betting model in terms for R-squared. Sportsbooks are very efficient markets, so the betting lines for these games will be a great predictor of how much success these teams will have in the passing game. Comparing the models using an F-test also shows that the Vegas Model is not the same as the betting model.
+The R-squared on the Vegas model is superior to the betting model. Comparing the models using an F-test also shows that the Vegas Model is an improvement over the betting model as the p-value of the F test is very small.
 
 ```{r}
 anova(vegas_model, betting_model)
 ```
 
-To improve our Vegas Model, we use stepwise backward selection. The final model is below.
+To improve our Vegas Model, we used stepwise backward selection. The final model is below.
 ```{r}
-step_result <- stats::step(vegas_model, direction="backward", test="F")
+#step_result <- stats::step(vegas_model, direction="backward", test="F")
 
 final_vegas_model <- lm(pass_epa_game ~ wind + temp + precipitation
                         + spread_line + total_line, data = train_set)
 
 summary(final_vegas_model)
 ```
+Using the predicted values on the test data, we calculate the r-squared and adjusted r-squared of the final model.
+```{r, echo=T}
+predicted_values <- predict(final_vegas_model, newdata = test_set)
+
+actual <- test_set$pass_epa_game
+mean_actual <- mean(actual)
+sst <- sum((actual - mean_actual)^2)
+ssr <- sum((predicted_values - mean_actual)^2)
+ssres <- sum((actual - predicted_values)^2)
+rsquared <- ssr / sst
+
+num_predictors <- length(coefficients(final_vegas_model)) - 1
+n <- length(actual)
+adj_rsquared <- 1 - ((1 - rsquared) * (n - 1) / (n - num_predictors - 1))
+
+rsquared
+adj_rsquared
+```
 
 
+### Model Intepretation
+
+There were a few things we want to highlight about the best model. 
+
+- Our wind:cold interaction term did not make it into the final model. That indicates that while NFL teams clearly pass the ball less in cold and windy games, there may not be evidence that it's the best strategy.
+- A team's passing success in their last 3 games (epa_pass_last3) was the strongest input in the betting model, but in the final Vegas model it was left out entirely. Why was this? Our best guess is that sportsbook spreads and game totals, which are very efficient and liquid markets, have a team's recent passing game success baked in (as well as many more factors) and therefore using that stat is redundant.
+- Lastly, the adjusted R-squared of our best model isn't that high, it only explains 15.74% of the variance in EPA passing. It seems that it's quite difficult to predict what might happen in an NFL game.
