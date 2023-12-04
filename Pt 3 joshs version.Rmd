@@ -53,8 +53,8 @@ We need to take a few steps to ensure we have the proper features to create the 
 
 Before training the model, we want to higlight some analysis of a possible interaction variable. In part 2 of our project, we showed that wind was a small but relevant factor in predicting passing success. We wanted to see if colder weather may make wind a stronger effect. Plots comparing wind on EPA passing are below, split out by data where the temperature was over 40 degrees Fahrenheit and under 40 degrees.
 
-```{r fig.cap = "Passing vs wind in different temperatures"}
-data$cold <- ifelse(data$temp < 40, "under_40", "over_40")
+```{r fig.cap = "Passing vs Wind in Different Temperatures"}
+data$cold <- ifelse(data$temp < 40, "Under 40", "Over 40")
 data$high_wind <- ifelse(data$wind > 15, "high_wind", "low_wind")
 data$precipitation<- trimws(data$precipitation)
 data$precipitation <- sub('lightrainsnow', 'rainsnow', data$precipitation)
@@ -62,8 +62,8 @@ data$precipitation <- sub('lightrainsnow', 'rainsnow', data$precipitation)
 data$surface <- trimws(data$surface)
 data$surface <- sub('a_turf', 'fieldturf', data$surface)
 
-data %>% ggplot(aes(x = wind, y = pass_epa_game)) + facet_wrap(~ factor(cold)) + geom_point()
-data %>% ggplot(aes(x = wind, y = pass_rate)) + facet_wrap(~ factor(cold)) + geom_point()
+data %>% ggplot(aes(x = wind, y = pass_epa_game)) + facet_wrap(~ factor(cold)) + geom_point() + labs(x='Wind (MPH)', y='Passing EPA')
+data %>% ggplot(aes(x = wind, y = pass_rate)) + facet_wrap(~ factor(cold)) + geom_point() + labs(x='Wind (MPH)', y='Passing Rate')
 ```
 Interestingly enough, the relationship that stands out is actually between in game pass rate (pass_rate) and wind in cold temperatures. This suggests teams may not believe they will have success passing the ball on cold days with high wind.
 
@@ -129,6 +129,33 @@ adj_rsquared <- 1 - ((1 - rsquared) * (n - 1) / (n - num_predictors - 1))
 rsquared
 adj_rsquared
 ```
+### Influence Points
+
+```{r}
+fittedvals <- fitted(final_vegas_model)
+residys<-rstudent(final_vegas_model)
+
+ggplot(data = train_set , aes(x = fittedvals, y = residys)) +geom_point() + labs( x = 'Fitted Values', y = 'Studentized Residuals') + geom_hline(yintercept = 0, linetype = "solid", color = "red")
+
+cooks_distance <- cooks.distance(final_vegas_model)
+
+plot(cooks_distance, pch = 20, main = "Cook's Distance Plot", xlab = "Observation", ylab = "Cook's Distance")
+```
+Observing the studentized residual and Cook's Distance plots, we can see that there is 3 outliers in the data set. There were no leverage points in this data set. Now we will remove them from the data to see how affect they actually have on the model.
+
+```{r}
+outlier_indices <- which(cooks.distance(final_vegas_model) > .05)
+no_outliers <- train_set[-outlier_indices, ]
+vegas_no_outliers <- lm(pass_epa_game ~ wind + temp + precipitation
+                        + spread_line + total_line, data = no_outliers)
+summary(vegas_no_outliers)$r.squared
+summary(vegas_no_outliers)$fstatistic
+summary(final_vegas_model)$r.squared
+summary(final_vegas_model)$fstatistic
+```
+
+The top 2 boxes are the $R^2$ and F statistic for the model without the outliers, and the bottom 2 boxes are with the outliers. Clearly, the difference in variation explained is very small and the significance of the F tests are essentially the same. Thus, we will continue with our outliers present.
+
 
 
 ### Model Intepretation
@@ -155,6 +182,8 @@ Our$\hat{\beta}_5 =$ .008 meaning that after accounting for the other variables,
 
 
 ### Some Intervals
+
+Since we have a categorical variable keeping track of precipitation (precipitationrainsnow), we will make intervals corresponding to 'with precipitation,' and 'without precipitation.'
 
 ```{r}
 set.seed(412)
@@ -187,19 +216,6 @@ With 95% confidence, during their selected game, our selected offense's Passing 
 The negative effect of precipitation is tangible when observing the confidence intervals of mean Passing EPA. The natural intuition would be that teams passing performance would decrease with precipitation since the ball would be more slippery, the field would be more slippery, and along with precipitation usually comes wind, which we previously showed has a negative correlation with Passing EPA. In the presence of precipitation, the mean Passing EPA may decrease by as much as .275 per play. This effect is roughly equivalent to a 40 mph increase in wind speeds. Essentially, precipitation Can be VERY influential on Passing EPA. But not always as we will see now.
 
 The prediction intervals are a little less straight forward. The 'with precipitation' prediction interval completely encapsulates the 'without precipitation' prediction interval. After observing more closely, the chosen team for these predictions is the Baltimore Ravens who would be more attuned to precipatory conditions since they live in an area of the US with lots of rain and snow (as compared to someone like the Chargers who are from LA). This would explain why the prediction 'with precipitation' is so close to the prediction 'without precipitation.' However, it does follow natural intuition that the lower end of the 'with precipitation' interval is lower than the 'without precipitation' interval, since we would expect the precipitation to have a negative effect. 
-
-### Influence Points
-
-```{r}
-fittedvals <- fitted(final_vegas_model)
-residys<-rstudent(final_vegas_model)
-
-ggplot(data = train_set , aes(x = fittedvals, y = residys)) +geom_point() + labs( x = 'Fitted Values', y = 'Studentized Residuals') + geom_hline(yintercept = 0, linetype = "solid", color = "red")
-
-cooks_distance <- cooks.distance(final_vegas_model)
-
-plot(cooks_distance, pch = 20, main = "Cook's Distance Plot", xlab = "Observation", ylab = "Cook's Distance")
-```
 
 
 
