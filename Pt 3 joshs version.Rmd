@@ -34,19 +34,6 @@ In the NFL, success in the passing game is a key part of winning a football game
 data <- read.csv('/Users/joshc/Downloads/nflgameproject.csv') #set this to the proper location
 
 ```
-
-Things to do (Josh):
-I have completed everything on the project step 3 instructions up until these below. You can look at the project step 3 after "After choosing a single model."
-
-
-Analyze residuals and influential points
-
-Do anything that you feel I missed
-
-
-Once you're done, I can write the conclusion and give an interpretation of the model that makes sense.
-
-
 ### Feature Engineering
 
 We need to take a few steps to ensure we have the proper features to create the best model. We want to change some of our weather terms into categorical variables so we can explore whether it helps improve their values in our model. We will create new categorical variables for wind and temperature. We will also combine lightrainsnow and rainsnow as there are few instances of lightrainsnow. We are also changing the variable 'a_turf' in surface to 'fieldturf' as both are turf surfaces and there and very few instances of a_turf.
