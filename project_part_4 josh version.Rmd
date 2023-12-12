@@ -1,0 +1,233 @@
+---
+title: "project part 4"
+author: "Max S and Josh"
+date: "2023-12-09"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = F,
+                      results = 'markup',
+                      fig.width = 4,
+                      fig.height = 3,
+                      fig.align = 'center',
+                      message = F,
+                      warning = F)
+
+# packages
+library(faraway)
+library(tidyverse)
+library(tidymodels)
+library(modelr)
+library(ggplot2)
+library(dplyr)
+library(ISLR)
+library(glmnet)
+library(tidyr)
+```
+
+
+## Linear Modeling with NFL Data
+
+### Introduction
+
+In the NFL, success in the passing game is a key part of winning a football game. In this project, we seek to create a model to predict passing game success (quantified as Expected Points Added (EPA) Passing per play) using play-by-play and game level data from NFLFastR ((<https://github.com/nflverse/nflfastR>)). All of our input variables will be pre-game factors. Our data is a collection of outdoor football games from the 2021 and 2022 seasons.
+
+```{r, echo=F}
+data <- read.csv('/Users/joshc/Downloads/nflgameproject.csv') #set this to the proper location
+
+```
+
+### Improving the Model Using Regularizations Techniques
+
+In part 3 of our project, we trained a 'Vegas' model using the data at our disposal. But we suspect there may be colinearity issues with our data. One prime example is sportsbook lines and totals with weather factors. Since these sportsbook numbers are markets, they likely will take into account some of these weather factors. We created a correlation matrix below to highlight some of the strongest correlations.
+
+
+```{r, echo=FALSE}
+data$cold <- ifelse(data$temp < 40, "Under 40", "Over 40")
+data$high_wind <- ifelse(data$wind > 15, "high_wind", "low_wind")
+data$precipitation<- trimws(data$precipitation)
+data$precipitation <- sub('lightrainsnow', 'rainsnow', data$precipitation)
+
+data$surface <- trimws(data$surface)
+data$surface <- sub('a_turf', 'fieldturf', data$surface)
+```
+
+```{r}
+columns_to_exclude <- c('game_id', 'posteam', 'week', 'season', 'weekday', 'roof')
+full_data <- data[, !(names(data) %in% columns_to_exclude)]
+```
+
+```{r}
+columns_to_exclude <- c('precipitation', 'surface', 'cold', 'high_wind', 'rush_rate', 'div_game', 'epa_rush_last3', 'wind', 'pass_rate_last3')
+cor_data <- full_data[, !(names(full_data) %in% columns_to_exclude)]
+
+round(cor(cor_data), 2)
+```
+There are a few correlations here that seem significant. As we suspected, total_line (one of our sportsbook market numbers) is moderately correlated with temperature and epa_pass_last3. In a previous part of our project, we saw that epa_pass_last3, despite being a significant factor in our Betting Model, was not included in our Vegas model when using stepwise feature selection. If we use Ridge or Lasso methods, we suspect epa_pass_last3 might be included in our final model.
+
+### Ridge
+
+First we will perform ridge regression on our data. Then we will use cross-validation to find the tuning parameter $\lambda$
+
+
+```{r}
+full_data<- na.omit(full_data)
+x <- model.matrix(pass_epa_game~. - 1, data = full_data)
+y<- data$pass_epa_game
+ridge_mod <- glmnet(x,y, alpha = 0)
+```
+
+
+```{r}
+set.seed(51)
+tuningrid <- cv.glmnet(x,y,alpha = 0)
+plot(tuningrid)
+abline(v=log(tuningrid$lambda.min), col = 'blue')
+```
+```{r}
+bestrid = tuningrid$lambda.min
+bestrid
+ridco<- predict(ridge_mod,type = 'coefficients', s=bestrid)
+ridco
+```
+This is our best ridge regression model. Our best value of $\lambda$ is $\lambda$ = .07861
+
+### Lasso
+
+
+Now we will perform lasso regression on our data.Then we will use cross-validation to find the tuning parameter $\lambda$
+```{r}
+lasso_mod <- glmnet(x,y,alpha = 1)
+plot(lasso_mod, xvar = 'lambda', label = TRUE)
+```
+
+
+```{r}
+tuninglas <- cv.glmnet(x,y,alpha = 1)
+plot(tuninglas)
+abline(v=log(tuninglas$lambda.min), col = 'blue')
+```
+```{r}
+bestlas <- tuninglas$lambda.min
+lasco<- predict(lasso_mod,type = 'coefficients', s=bestlas)
+bestlas
+lasco
+```
+This is our best lasso regression model, with our best value of $\lambda$ is $\lambda$ = .00517
+
+
+
+
+### Comparison to old model
+```{r}
+#Model from part 3
+final_vegas_model <- lm(pass_epa_game ~ wind + temp + precipitation
+                        + spread_line + total_line, data = full_data)
+coefficients(final_vegas_model)
+#ridco
+lasco
+
+```
+The most obvious difference in these models is the number of predictors. The Vegas model (top) underwent step wise backward selection and only depends on 6 predictors, whereas the ridge model (middle) and lasso model (bottom) depend on 16 and 15 non-zero predictors respectively. 
+
+```{r}
+coefficients(final_vegas_model)
+ridco[1]
+ridco[9]
+ridco[10]
+ridco[4]
+ridco[7]
+ridco[8]
+```
+This is the ridge regression's version of each of the vegas model coefficients
+
+```{r}
+coefficients(final_vegas_model)
+lasco[1]
+lasco[9]
+lasco[10]
+lasco[4]
+lasco[7]
+lasco[8]
+```
+This is the lasso regression's version of each of the vegas model coefficients
+
+
+```{r}
+ridco[1]
+ridco[9]
+ridco[10]
+ridco[4]
+ridco[7]
+ridco[8]
+print('above is ridge, below is lasso')
+lasco[1]
+lasco[9]
+lasco[10]
+lasco[4]
+lasco[7]
+lasco[8]
+```
+
+### Logistic regression to predict tail outcomes
+
+One question we are curious about is the ability of our feature variables to predict tail outcomes. Can we accurately estimate the probability that a NFL team will have a significantly poor game passing? This might be a more accurate prediction than trying to predict passing epa in all situations.
+
+Looking at the quantiles below, we see that the bottom 25% of games are under ~-.18 epa per passing play and the top 25% are above ~.2. We will classify as poor game as one where the passing_epa_game falls under -.2. 
+
+```{r}
+summary(full_data$pass_epa_game)
+
+full_data <- full_data %>%
+  mutate(poor_game = ifelse(pass_epa_game <= -0.2, 1, 0))
+
+```
+
+To perform logistic regression, we need our response to be some sort of binary result. The response we've been using for this project so far has been passing_epa_game, but since this is a quantitative measure of points added per play, it violates the conditions of logisitic regression. To fix this problem, we added a new column to our data set called "poor_game" which is set to 1 if passing_epa_game is under our threshold of -.2 and set to 0 if it is above our threshold. Also since poor_game is a function of passing_epa_game, we will not use passing_epa_game as a predictor in the model.
+```{r}
+logdata <- full_data %>% select(-'pass_epa_game')
+
+
+log_model <- glm(poor_game~., data = logdata)
+coefficients(log_model)
+```
+These are the coefficients for our logistic model.
+
+
+### Summary
+
+When we set out to work on this project, we assumed our model would be similar to those we learned in class, one that is highly accurate with a high R-squared and great predictive power. What we ended up with was very different, but it taught us some key things about modeling and predicting NFL stats.
+
+### 1) Signal May Have Lots of Noise
+
+Our first model we trained was a simple linear model with our $\beta_1$ as wind speed. The summary is below.
+
+```{r}
+lmod <- lm(pass_epa_game ~ wind, data)
+summary(lmod)
+```
+The R-squared of the model is very low, barely above .01. Yet the p-value for windspeed is very low, suggesting that it is a significant factor. In our final model, weather factors like wind and temperature may have added little to the R-squared, meaning they only explain a small amount of the variance of our response, but they do in fact explain something! There's a saying in football "Any Given Sunday", meaning anything can happen on a football field. The big favorite can lose, the great quarterback can falter, and the rookie can outperform. Football games are not like average lifespans of species, something that is basically set in stone. Because of this, our model is going to look different than other models, but it does not mean that the model has less value.
+
+
+### 2) Strategy Doesn't Always Match Reality (Wind:cold vs passing rate)
+
+One aspect of our project that was interesting was passing rate (more of a strategy decision) vs passing epa (more of a success statistic). When looking for interaction terms, we discovered that passing rate had a stronger relationship with wind speed when temperature was under 40 degree Farenheit. However, there seemed to be a weaker relationship between pass epa and those same factors. NFL coaches clearly game plan differently for this weather, but it may not be justified.
+```{r}
+data %>% ggplot(aes(x = wind, y = pass_epa_game)) + facet_wrap(~ factor(cold)) + geom_point()
+data %>% ggplot(aes(x = wind, y = pass_rate)) + facet_wrap(~ factor(cold)) + geom_point()
+```
+
+
+
+### 3) The Market is Likely Correlated With Any Factor That Has Signal.
+
+In hindsight, it seems quite obvious that sportsbook markets would have correlations with some of our input variables. Total_lines and spread_lines are created by sportsbooks in Las Vegas taking bets from customers, and those sportsbooks moving those lines in an attempt to get equal money on both sides of the bet. This creates an efficient market that takes into account all sorts of factors from all sorts of bettors. 
+
+```{r}
+round(cor(full_data[, c('temp', 'total_line')]), 2)
+```
+
+Clearly, temperature is a big factor with the total line market, as they are significantly correlated.
+
+These markets are great signals for passing game epa, but their colinearity with other factors were causing those factors to be left out of our model. Because of this, regularization methods helped improve our model significantly.
