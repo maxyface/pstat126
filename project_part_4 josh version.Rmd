@@ -74,7 +74,7 @@ First we will perform ridge regression on our data. Then we will use cross-valid
 ```{r}
 full_data<- na.omit(full_data)
 x <- model.matrix(pass_epa_game~. - 1, data = full_data)
-y<- data$pass_epa_game
+y<- full_data$pass_epa_game
 ridge_mod <- glmnet(x,y, alpha = 0)
 ```
 
@@ -121,54 +121,48 @@ This is our best lasso regression model, with our best value of $\lambda$ is $\l
 
 ### Comparison to old model
 ```{r}
-#Model from part 3
 final_vegas_model <- lm(pass_epa_game ~ wind + temp + precipitation
                         + spread_line + total_line, data = full_data)
 coefficients(final_vegas_model)
-#ridco
+ridco
 lasco
 
 ```
-The most obvious difference in these models is the number of predictors. The Vegas model (top) underwent step wise backward selection and only depends on 6 predictors, whereas the ridge model (middle) and lasso model (bottom) depend on 16 and 15 non-zero predictors respectively. 
+The most obvious difference in these models is the number of predictors. The Vegas model (top) underwent step wise backward selection and only depends on 6 predictors, whereas the ridge model (middle) and lasso model (bottom) depend on 16 and 14 non-zero predictors respectively. When observing the 6 predictors that are shared by all models, the coefficients for these predictors are not very different. The only distinct difference is that the lasso regression values precipitationrainsnow much less than the other models. The lasso regression essentially puts the coefficient estimate at 0. This is a result of lasso regressions sparsity properties, helping to make the model more simple. The large similarities between all 3 models highlights our findings in project step 3 that our Vegas model is very good.
 
-```{r}
-coefficients(final_vegas_model)
-ridco[1]
-ridco[9]
-ridco[10]
-ridco[4]
-ridco[7]
-ridco[8]
-```
-This is the ridge regression's version of each of the vegas model coefficients
-
-```{r}
-coefficients(final_vegas_model)
-lasco[1]
-lasco[9]
-lasco[10]
-lasco[4]
-lasco[7]
-lasco[8]
-```
-This is the lasso regression's version of each of the vegas model coefficients
+To help compare models we will create one graph of observed versus predicted pass_epa_game with all 3 models on it.
 
 
 ```{r}
-ridco[1]
-ridco[9]
-ridco[10]
-ridco[4]
-ridco[7]
-ridco[8]
-print('above is ridge, below is lasso')
-lasco[1]
-lasco[9]
-lasco[10]
-lasco[4]
-lasco[7]
-lasco[8]
+
+mlr_predictions <- predict(final_vegas_model, newdata = full_data)
+new_data_predictors <- model.matrix(pass_epa_game ~ . - 1, data = full_data)
+ridge_predictions <- predict(ridge_mod, newx = new_data_predictors, s = bestrid)
+lasso_predictions <- predict(lasso_mod, newx = new_data_predictors, s=bestlas)
+observed<- full_data$pass_epa_game
+
+lengths <- c(length(observed), length(lasso_predictions), length(ridge_predictions), length(mlr_predictions))
+
+if (!all(lengths[-1] == lengths[1])) {
+  # Align lengths by trimming the longer vectors
+  min_length <- min(lengths)
+  
+  observed <- observed[1:min_length]
+  lasso_predictions <- lasso_predictions[1:min_length]
+  ridge_predictions <- ridge_predictions[1:min_length]
+  mlr_predictions <- mlr_predictions[1:min_length]
+}
 ```
+
+```{r, fig.width=8, fig.height=6}
+plot(observed, lasso_predictions, col = "blue", cex = .5, xlab = "Observed", ylab = "Predicted", main = "Observed vs Predicted - All Models", pch = 16)
+points(observed, ridge_predictions, col = "red", cex = .5, pch = 16)
+points(observed, mlr_predictions, col = "green", cex = .5, pch = 16)
+legend("topleft", legend = c("Lasso", "Ridge", "MLR"), col = c("blue", "red", "green"),pch = 16 )
+```
+
+This graph brings us to a similar conclusion to our coefficient analysis. Essentially our MLR, Ridge, and Lasso models are all the same. There is little to no discernible difference to the trend between models and we are brought to the conclusion that Lasso and Ridge regression do not bring significant advantages as compared to stepwise backward selection.
+
 
 ### Logistic regression to predict tail outcomes
 
